@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+
+    <script src="../js/jquery-1.8.3.min.js" type="text/javascript"></script>
+    <script src="../js/mui.min.js"></script>
+    <script src="../js/md5.js" type="text/javascript"></script>
+    <script src="../js/vue.min.js"></script>
+    <script src="../js/InitData.js" type="text/javascript"></script>
+    <script src="../js/cos-js-sdk-v5.min.js" type="text/javascript"></script>
+    <title></title>
+    <style>
+        html,body {
+            background-color: #FFFFFF;
+            width: 100%;
+            height: 100%;
+        }
+        #previewFile {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+<div id="previewFile">
+    <iframe :src="previewFileUrl" style="border: none" width="100%" height="100%"></iframe>
+</div>
+
+<script>
+    // 从url获取信息
+
+
+    let vm = new Vue({
+        el: '#previewFile',
+        data() {
+            return {
+                // 账号信息
+                account: 'hjc004148',
+                // 文件预览
+                previewFileUrl: ''
+            }
+        },
+        created() {
+            // 当前登录账号
+            // this.account = localStorage.getItem('account')
+            const fileName = sessionStorage.getItem('marketFileName')
+            document.title = fileName
+            const fileSize = sessionStorage.getItem('marketFileSize')
+            const fileUrl = sessionStorage.getItem('marketFileUrl')
+            this.previewFile(fileName, fileSize, fileUrl)
+        },
+        methods: {
+            // 预览文件
+            previewFile(fileName, fileSize, fileUrl) {
+                let that = this
+                // 腾讯云访问url
+                let cos = new COS({
+                    // getAuthorization 必选参数
+                    getAuthorization: function (options, callback) {
+                        $.get(remoteUrl + "/api/market/getSignByCos", function (response) {
+                            const result = response.result;
+                            callback({
+                                TmpSecretId: result.credentials.tmpSecretId,
+                                TmpSecretKey: result.credentials.tmpSecretKey,
+                                SecurityToken: result.credentials.sessionToken,
+                                StartTime: result.startTime, // 时间戳，单位秒，如：1580000000
+                                ExpiredTime: result.expiredTime, // 时间戳，单位秒，如：1580000000
+                            })
+                        })
+                    }
+                });
+                cos.getObjectUrl({
+                    Bucket: 'market-up-asy-file-1255353672',
+                    Region: 'ap-guangzhou',
+                    Key: fileUrl,
+                    Protocol: 'https:',
+                    Sign: true
+                }, function (err, result) {
+                    if (err) {
+                        mui.toast('访问失败！')
+                    } else if (result) {
+                        // 添加文件记录(预览)
+                        that.insertFileRecord(fileName, fileSize, 0)
+
+                        that.previewFileUrl = result.Url + '&ci-process=doc-preview&dstType=html&copyable=0'
+                    }
+                })
+            },
+            // 添加文件记录
+            insertFileRecord(fileName, fileSize, operate) {
+                mui.ajax(remoteUrl + '/api/market/insertFileRecord', {
+                    async: false,
+                    data: {
+                        account: this.account,
+                        fileName: fileName,
+                        fileSize: fileSize,
+                        operate: operate,
+                        ver:hexMD5("/api/market/insertFileRecord"+this.account+fileName+fileSize+operate)
+                    },
+                    dataType: 'json',
+                    type: 'post',
+                    success: function (data) {
+                        if (!data.success) {
+                            mui.toast(data.message)
+                        }
+                    },
+                    error: function (xhr, type, errorThrown) {
+                        mui.toast("请求客户类型数据异常")
+                    }
+                })
+            }
+        }
+    })
+</script>
+</body>
+</html>
